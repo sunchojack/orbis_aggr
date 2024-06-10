@@ -1,0 +1,121 @@
+```{r}
+# Load required libraries
+library(dplyr)
+library(tidyr)
+library(readr)
+library(stringr)
+library(zip)
+
+# Define global paths
+path <- "C:/Users/Arsenev/wiiw Dropbox/Aleksandr Arsenev/2024-04-22/out"
+db <- "C:/Users/Arsenev/wiiw Dropbox/Aleksandr Arsenev/2024-04-22/DB2"
+# odbc <- "C:/wiiw Dropbox/Mahdi Ghodsi/Wien/Data/Orbis/Data/ODBC/ODBC/"
+# cc <- "C:/wiiw Dropbox/Mahdi Ghodsi/Wien/Data/Country Codes"
+# eu <- "C:/wiiw Dropbox/Mahdi Ghodsi/Wien/Data/EU/"
+
+out_path = getwd()
+
+# Create necessary directories if they do not exist
+dir.create(file.path(out_path, "out"), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(out_path, "out", "Combined_granted"), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(out_path, "out", "Combined_granted", "activity"), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(out_path, "out", "Combined_granted", "activity", "LMS"), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(out_path, "out", "Combined_granted", "guo"), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(out_path, "out", "Combined_granted", "guo", "LMS"), showWarnings = FALSE, recursive = TRUE)
+
+# Function to create decade directories
+create_decade_dirs <- function(from, to, step) {
+  for (d in seq(from, to, by = step)) {
+    dir.create(file.path(out_path, "out", paste0(d, "s", "Combined_granted")), showWarnings = FALSE, recursive = TRUE)
+  }
+}
+
+# Function to process data for each decade
+process_decade_data <- function(decade) {
+  decade_path <- file.path(db, paste0(decade, "s"))
+  decade_out <- file.path(path, "out", paste0(decade, "s"))
+
+  # Change directory
+  setwd(decade_path)
+
+  # List all items in the directory
+  folders <- list.dirs(decade_path, full.names = FALSE, recursive = FALSE)
+
+  # Process each folder
+  for (folder in folders) {
+    folder_path <- file.path(decade_path, folder)
+    output_path <- file.path(decade_out, folder)
+    dir.create(output_path, showWarnings = FALSE, recursive = TRUE)
+
+    # Check for existing .zip or .dta files
+    zip_file <- file.path(output_path, paste0(folder, "_", decade, "s.zip"))
+    dta_file <- file.path(output_path, paste0(folder, "_", decade, "s.dta"))
+
+    if (!file.exists(zip_file) & !file.exists(dta_file)) {
+      csv_file <- file.path(folder_path, paste0(folder, "_", decade, "s.csv"))
+      if (file.exists(csv_file)) {
+        data <- read_csv(csv_file)
+        data <- data %>%
+          arrange(Publicationnumber) %>%
+          mutate(year = substr(Applicationfilingdate, 1, 4),
+                 month = substr(Applicationfilingdate, 6, 7),
+                 day = substr(Applicationfilingdate, 9, 10),
+                 date = as.Date(paste(year, month, day, sep = "-"), format = "%Y-%m-%d")) %>%
+          select(Publicationnumber, date, year) %>%
+          arrange(Publicationnumber, date, year)
+
+        write_csv(data, file.path(output_path, paste0(folder, "_", decade, "s.dta")))
+
+        # Zip the file and remove the .dta file
+        zip(zip_file, files = file.path(output_path, paste0(folder, "_", decade, "s.dta")))
+        unlink(file.path(output_path, paste0(folder, "_", decade, "s.dta")))
+      }
+    }
+  }
+}
+
+
+
+# Function to merge patent data with other attributes
+merge_patent_data <- function(decade) {
+  # Change to output directory
+  setwd(file.path(out_path, "out", paste0(decade, "s", "Combined_granted")))
+
+  # Define paths for different files
+  zip_file <- file.path(getwd(), paste0("owner_year_granted_", decade, "s_v2.zip"))
+  dta_file <- file.path(getwd(), paste0("owner_year_granted_", decade, "s_v2.dta"))
+
+  # Unzip if necessary
+  if (!file.exists(dta_file) & file.exists(zip_file)) {
+    unzip(zip_file, exdir = getwd())
+  }
+
+  if (file.exists(dta_file)) {
+    data <- read_csv(dta_file)
+
+    # Additional processing
+    data <- data %>%
+      arrange(Publicationnumber) %>%
+      group_by(owner, year) %>%
+      summarize(across(c(applied, priority, published, granted, expired),
+                       ~ sum(.x, na.rm = TRUE), .names = "total_{col}")) %>%
+      ungroup()
+
+    write_csv(data, dta_file)
+
+    # Zip the file and remove the .dta file
+    zip(zip_file, files = dta_file)
+    unlink(dta_file)
+  }
+}
+
+# Example usage of functions
+create_decade_dirs(1890, 2020, 10)
+
+for (decade in seq(1890, 2020, by = 10)) {
+  process_decade_data(decade)
+  merge_patent_data(decade)
+}
+
+```
+
