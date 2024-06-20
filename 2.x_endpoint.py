@@ -1,7 +1,7 @@
 import pandas as pd
 
 # data = pd.read_csv('Data/final/owners_country_industry__nongranted.csv')
-data = pd.read_csv('Data/final/owners_country_industry.csv')
+data = pd.read_csv('Data_actual_out/FINAL_nongranted_owners_country_industry.csv')
 
 data = data.drop(columns=['owner'])
 
@@ -12,4 +12,4 @@ aggregated_data = data.groupby(['ctryiso', 'nace2d', 'year']).sum().reset_index(
 print(aggregated_data)
 
 # Save to a CSV file
-aggregated_data.to_csv('Data/final/couind_aggregated_nongranted.csv', index=False)
+aggregated_data.to_csv('Data_actual_out/FINAL_couind_aggregated_nongranted.csv', index=False)
